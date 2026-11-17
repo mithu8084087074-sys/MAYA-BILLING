@@ -1,0 +1,675 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isNonNegNumber(v) {
+      return (v is int || v is float) && v >= 0;
+    }
+
+    function isAnyNumber(v) {
+      return (v is int || v is float);
+    }
+
+    function isBoundedStr(v, minLen, maxLen) {
+      return v is string && v.size() >= minLen && v.size() <= maxLen;
+    }
+
+    // --- Entity Validation Helpers ---
+
+    function isValidBusinessConfig(data) {
+      return data.keys().hasAll([
+        'userId', 'businessName', 'businessPhone', 'businessAddress', 'gstin', 'stateName',
+        'upiId', 'upiMerchantName', 'invoicePrefix', 'nextInvoiceNumber', 'invoiceTemplate',
+        'ownerPasswordHash', 'ownerPasswordSalt', 'mustChangeInitialPassword',
+        'twoFactorEnabled', 'appVersion', 'autoUpdateEnabled', 'maintenanceMode',
+        'voiceBillingEnabled', 'gstBillingEnabled', 'upiQrEnabled', 'purchaseModuleEnabled',
+        'autoBackupEnabled', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'businessName', 'businessPhone', 'businessAddress', 'gstin', 'stateName',
+        'upiId', 'upiMerchantName', 'invoicePrefix', 'nextInvoiceNumber', 'invoiceTemplate',
+        'logoUri', 'ownerPasswordHash', 'ownerPasswordSalt', 'mustChangeInitialPassword',
+        'recoveryPinHash', 'recoveryHint', 'twoFactorEnabled', 'twoFactorCode',
+        'appVersion', 'autoUpdateEnabled', 'maintenanceMode',
+        'voiceBillingEnabled', 'gstBillingEnabled', 'upiQrEnabled', 'purchaseModuleEnabled',
+        'autoBackupEnabled', 'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.businessName, 1, 100) &&
+      isBoundedStr(data.businessPhone, 0, 25) &&
+      isBoundedStr(data.businessAddress, 0, 250) &&
+      isBoundedStr(data.gstin, 0, 20) &&
+      isBoundedStr(data.stateName, 0, 60) &&
+      isBoundedStr(data.upiId, 0, 100) &&
+      isBoundedStr(data.upiMerchantName, 0, 100) &&
+      isBoundedStr(data.invoicePrefix, 1, 15) &&
+      data.nextInvoiceNumber is int && data.nextInvoiceNumber >= 1 &&
+      data.invoiceTemplate in ['MODERN', 'CLASSIC', 'THERMAL'] &&
+      (!('logoUri' in data) || isBoundedStr(data.logoUri, 0, 500)) &&
+      isBoundedStr(data.ownerPasswordHash, 16, 128) &&
+      isBoundedStr(data.ownerPasswordSalt, 4, 64) &&
+      data.mustChangeInitialPassword is bool &&
+      (!('recoveryPinHash' in data) || isBoundedStr(data.recoveryPinHash, 0, 128)) &&
+      (!('recoveryHint' in data) || isBoundedStr(data.recoveryHint, 0, 100)) &&
+      data.twoFactorEnabled is bool &&
+      (!('twoFactorCode' in data) || isBoundedStr(data.twoFactorCode, 0, 12)) &&
+      isBoundedStr(data.appVersion, 1, 24) &&
+      data.autoUpdateEnabled is bool &&
+      data.maintenanceMode is bool &&
+      data.voiceBillingEnabled is bool &&
+      data.gstBillingEnabled is bool &&
+      data.upiQrEnabled is bool &&
+      data.purchaseModuleEnabled is bool &&
+      data.autoBackupEnabled is bool;
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll([
+        'userId', 'name', 'sku', 'barcode', 'category', 'hsnSac', 'unit',
+        'purchasePrice', 'sellingPrice', 'gstRate', 'stockQty', 'lowStockThreshold',
+        'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'name', 'sku', 'barcode', 'category', 'hsnSac', 'unit',
+        'purchasePrice', 'sellingPrice', 'gstRate', 'stockQty', 'lowStockThreshold',
+        'imageUri', 'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.name, 1, 120) &&
+      isBoundedStr(data.sku, 0, 50) &&
+      isBoundedStr(data.barcode, 0, 64) &&
+      isBoundedStr(data.category, 0, 60) &&
+      isBoundedStr(data.hsnSac, 0, 16) &&
+      isBoundedStr(data.unit, 1, 20) &&
+      isNonNegNumber(data.purchasePrice) &&
+      isNonNegNumber(data.sellingPrice) &&
+      isNonNegNumber(data.gstRate) && data.gstRate <= 100 &&
+      isNonNegNumber(data.stockQty) &&
+      isNonNegNumber(data.lowStockThreshold) &&
+      (!('imageUri' in data) || isBoundedStr(data.imageUri, 0, 500));
+    }
+
+    function isValidCustomer(data) {
+      return data.keys().hasAll([
+        'userId', 'name', 'phone', 'address', 'gstin', 'stateName',
+        'totalPurchases', 'outstandingBalance', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'name', 'phone', 'address', 'gstin', 'stateName',
+        'totalPurchases', 'outstandingBalance', 'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.name, 1, 100) &&
+      isBoundedStr(data.phone, 0, 20) &&
+      isBoundedStr(data.address, 0, 250) &&
+      isBoundedStr(data.gstin, 0, 20) &&
+      isBoundedStr(data.stateName, 0, 60) &&
+      isNonNegNumber(data.totalPurchases) &&
+      isNonNegNumber(data.outstandingBalance);
+    }
+
+    function isValidInvoice(data) {
+      return data.keys().hasAll([
+        'userId', 'invoiceNumber', 'invoiceType', 'taxMode', 'customerId', 'customerName',
+        'customerPhone', 'customerAddress', 'customerGstin', 'items', 'subtotal',
+        'discountAmount', 'taxableTotal', 'cgstTotal', 'sgstTotal', 'igstTotal',
+        'grandTotal', 'paidAmount', 'balanceDue', 'paymentStatus', 'paymentMethod',
+        'upiTransactionRef', 'notes', 'templateStyle', 'invoiceEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'invoiceNumber', 'invoiceType', 'taxMode', 'customerId', 'customerName',
+        'customerPhone', 'customerAddress', 'customerGstin', 'items', 'subtotal',
+        'discountAmount', 'taxableTotal', 'cgstTotal', 'sgstTotal', 'igstTotal',
+        'grandTotal', 'paidAmount', 'balanceDue', 'paymentStatus', 'paymentMethod',
+        'upiTransactionRef', 'notes', 'templateStyle', 'invoiceEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.invoiceNumber, 1, 40) &&
+      data.invoiceType in ['GST', 'NON_GST'] &&
+      data.taxMode in ['INTRA_STATE', 'INTER_STATE', 'NONE'] &&
+      isBoundedStr(data.customerId, 0, 128) &&
+      isBoundedStr(data.customerName, 1, 100) &&
+      isBoundedStr(data.customerPhone, 0, 20) &&
+      isBoundedStr(data.customerAddress, 0, 250) &&
+      isBoundedStr(data.customerGstin, 0, 20) &&
+      data.items is list && data.items.size() >= 1 && data.items.size() <= 100 &&
+      isNonNegNumber(data.subtotal) &&
+      isNonNegNumber(data.discountAmount) &&
+      isNonNegNumber(data.taxableTotal) &&
+      isNonNegNumber(data.cgstTotal) &&
+      isNonNegNumber(data.sgstTotal) &&
+      isNonNegNumber(data.igstTotal) &&
+      isNonNegNumber(data.grandTotal) &&
+      isNonNegNumber(data.paidAmount) &&
+      isNonNegNumber(data.balanceDue) &&
+      data.paymentStatus in ['PAID', 'PARTIAL', 'UNPAID', 'FAILED'] &&
+      data.paymentMethod in ['CASH', 'UPI_QR', 'BANK', 'CREDIT'] &&
+      isBoundedStr(data.upiTransactionRef, 0, 100) &&
+      isBoundedStr(data.notes, 0, 300) &&
+      data.templateStyle in ['MODERN', 'CLASSIC', 'THERMAL'] &&
+      data.invoiceEpochMs is int && data.invoiceEpochMs > 0;
+    }
+
+    function isValidPaymentRecord(data) {
+      return data.keys().hasAll([
+        'userId', 'invoiceId', 'invoiceNumber', 'customerId', 'customerName', 'amount',
+        'method', 'upiApp', 'upiId', 'transactionRef', 'verificationStatus',
+        'verifiedByOwner', 'notes', 'paymentEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'invoiceId', 'invoiceNumber', 'customerId', 'customerName', 'amount',
+        'method', 'upiApp', 'upiId', 'transactionRef', 'verificationStatus',
+        'verifiedByOwner', 'notes', 'paymentEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.invoiceId, 1, 128) &&
+      isBoundedStr(data.invoiceNumber, 1, 40) &&
+      isBoundedStr(data.customerId, 0, 128) &&
+      isBoundedStr(data.customerName, 1, 100) &&
+      isNonNegNumber(data.amount) &&
+      data.method in ['UPI_QR', 'CASH', 'BANK'] &&
+      isBoundedStr(data.upiApp, 0, 40) &&
+      isBoundedStr(data.upiId, 0, 100) &&
+      isBoundedStr(data.transactionRef, 0, 100) &&
+      data.verificationStatus in ['PENDING', 'VERIFIED', 'FAILED'] &&
+      data.verifiedByOwner is bool &&
+      // Critical anti-auto-verify guard: UPI payments cannot be marked VERIFIED without owner verification & transaction ref
+      (data.method != 'UPI_QR' || data.verificationStatus != 'VERIFIED' || (data.verifiedByOwner == true && data.transactionRef.size() >= 4)) &&
+      isBoundedStr(data.notes, 0, 250) &&
+      data.paymentEpochMs is int && data.paymentEpochMs > 0;
+    }
+
+    function isValidSupplier(data) {
+      return data.keys().hasAll([
+        'userId', 'name', 'phone', 'address', 'gstin',
+        'totalPurchased', 'outstandingPayable', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'name', 'phone', 'address', 'gstin',
+        'totalPurchased', 'outstandingPayable', 'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.name, 1, 100) &&
+      isBoundedStr(data.phone, 0, 20) &&
+      isBoundedStr(data.address, 0, 250) &&
+      isBoundedStr(data.gstin, 0, 20) &&
+      isNonNegNumber(data.totalPurchased) &&
+      isNonNegNumber(data.outstandingPayable);
+    }
+
+    function isValidPurchaseRecord(data) {
+      return data.keys().hasAll([
+        'userId', 'purchaseNumber', 'supplierId', 'supplierName', 'recordType',
+        'items', 'taxableTotal', 'gstTotal', 'grandTotal', 'paidAmount',
+        'paymentStatus', 'notes', 'purchaseEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'purchaseNumber', 'supplierId', 'supplierName', 'recordType',
+        'items', 'taxableTotal', 'gstTotal', 'grandTotal', 'paidAmount',
+        'paymentStatus', 'notes', 'purchaseEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.purchaseNumber, 1, 40) &&
+      isBoundedStr(data.supplierId, 0, 128) &&
+      isBoundedStr(data.supplierName, 1, 100) &&
+      data.recordType in ['PURCHASE', 'RETURN'] &&
+      data.items is list && data.items.size() >= 1 && data.items.size() <= 100 &&
+      isNonNegNumber(data.taxableTotal) &&
+      isNonNegNumber(data.gstTotal) &&
+      isNonNegNumber(data.grandTotal) &&
+      isNonNegNumber(data.paidAmount) &&
+      data.paymentStatus in ['PAID', 'PARTIAL', 'UNPAID'] &&
+      isBoundedStr(data.notes, 0, 250) &&
+      data.purchaseEpochMs is int && data.purchaseEpochMs > 0;
+    }
+
+    function isValidExpense(data) {
+      return data.keys().hasAll([
+        'userId', 'title', 'category', 'amount', 'paymentMode',
+        'notes', 'expenseEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'title', 'category', 'amount', 'paymentMode',
+        'notes', 'expenseEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.title, 1, 120) &&
+      isBoundedStr(data.category, 1, 60) &&
+      isNonNegNumber(data.amount) &&
+      isBoundedStr(data.paymentMode, 1, 30) &&
+      isBoundedStr(data.notes, 0, 250) &&
+      data.expenseEpochMs is int && data.expenseEpochMs > 0;
+    }
+
+    function isValidStockAdjustment(data) {
+      return data.keys().hasAll([
+        'userId', 'productId', 'productName', 'deltaQty', 'previousQty',
+        'newQty', 'reason', 'adjustmentEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'productId', 'productName', 'deltaQty', 'previousQty',
+        'newQty', 'reason', 'adjustmentEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.productId, 1, 128) &&
+      isBoundedStr(data.productName, 1, 120) &&
+      isAnyNumber(data.deltaQty) &&
+      isNonNegNumber(data.previousQty) &&
+      isNonNegNumber(data.newQty) &&
+      isBoundedStr(data.reason, 1, 120) &&
+      data.adjustmentEpochMs is int && data.adjustmentEpochMs > 0;
+    }
+
+    function isValidStaffUser(data) {
+      return data.keys().hasAll([
+        'userId', 'name', 'emailOrPhone', 'role', 'canManageBilling',
+        'canManageInventory', 'canManagePurchases', 'canViewReports', 'active',
+        'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'name', 'emailOrPhone', 'role', 'canManageBilling',
+        'canManageInventory', 'canManagePurchases', 'canViewReports', 'active',
+        'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.name, 1, 80) &&
+      isBoundedStr(data.emailOrPhone, 1, 100) &&
+      data.role in ['OWNER', 'MANAGER', 'BILLER', 'ACCOUNTANT'] &&
+      data.canManageBilling is bool &&
+      data.canManageInventory is bool &&
+      data.canManagePurchases is bool &&
+      data.canViewReports is bool &&
+      data.active is bool;
+    }
+
+    function isValidActivityLog(data) {
+      return data.keys().hasAll([
+        'userId', 'actor', 'action', 'details', 'category',
+        'logEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'actor', 'action', 'details', 'category',
+        'logEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.actor, 1, 80) &&
+      isBoundedStr(data.action, 1, 120) &&
+      isBoundedStr(data.details, 0, 300) &&
+      isBoundedStr(data.category, 1, 40) &&
+      data.logEpochMs is int && data.logEpochMs > 0;
+    }
+
+    function isValidBackupRecord(data) {
+      return data.keys().hasAll([
+        'userId', 'label', 'appVersion', 'recordCount', 'payloadJson',
+        'backupEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'label', 'appVersion', 'recordCount', 'payloadJson',
+        'backupEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.label, 1, 100) &&
+      isBoundedStr(data.appVersion, 1, 24) &&
+      data.recordCount is int && data.recordCount >= 0 &&
+      isBoundedStr(data.payloadJson, 2, 900000) &&
+      data.backupEpochMs is int && data.backupEpochMs > 0;
+    }
+
+    function isValidUpgradeHistory(data) {
+      return data.keys().hasAll([
+        'userId', 'fromVersion', 'toVersion', 'status', 'releaseNotes',
+        'backupId', 'upgradeEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'fromVersion', 'toVersion', 'status', 'releaseNotes',
+        'backupId', 'upgradeEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.fromVersion, 1, 24) &&
+      isBoundedStr(data.toVersion, 1, 24) &&
+      data.status in ['SUCCESS', 'ROLLED_BACK', 'FAILED'] &&
+      isBoundedStr(data.releaseNotes, 0, 400) &&
+      isBoundedStr(data.backupId, 0, 128) &&
+      data.upgradeEpochMs is int && data.upgradeEpochMs > 0;
+    }
+
+    function isValidReleaseItem(data) {
+      return data.keys().hasAll([
+        'userId', 'version', 'title', 'channel', 'securityUpdate',
+        'features', 'bugFixes', 'releaseEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'version', 'title', 'channel', 'securityUpdate',
+        'features', 'bugFixes', 'releaseEpochMs', 'createdAt', 'updatedAt'
+      ]) &&
+      isBoundedStr(data.userId, 1, 128) &&
+      isBoundedStr(data.version, 1, 24) &&
+      isBoundedStr(data.title, 1, 120) &&
+      isBoundedStr(data.channel, 1, 30) &&
+      data.securityUpdate is bool &&
+      isBoundedStr(data.features, 0, 500) &&
+      isBoundedStr(data.bugFixes, 0, 500) &&
+      data.releaseEpochMs is int && data.releaseEpochMs > 0;
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().userId == userId &&
+                       isValidBusinessConfig(incoming()) &&
+                       isValidTimestamp(incoming().createdAt) &&
+                       isValidTimestamp(incoming().updatedAt);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidBusinessConfig(incoming()) &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       (
+                         // Action 1: Business profile & GST/UPI/Template settings update
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'businessName', 'businessPhone', 'businessAddress', 'gstin', 'stateName',
+                           'upiId', 'upiMerchantName', 'invoicePrefix', 'invoiceTemplate', 'logoUri',
+                           'voiceBillingEnabled', 'gstBillingEnabled', 'upiQrEnabled', 'purchaseModuleEnabled',
+                           'autoBackupEnabled', 'updatedAt'
+                         ]) ||
+                         // Action 2: Increment invoice counter
+                         incoming().diff(existing()).affectedKeys().hasOnly(['nextInvoiceNumber', 'updatedAt']) ||
+                         // Action 3: Owner security credentials / 2FA / password change
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'ownerPasswordHash', 'ownerPasswordSalt', 'mustChangeInitialPassword',
+                           'recoveryPinHash', 'recoveryHint', 'twoFactorEnabled', 'twoFactorCode', 'updatedAt'
+                         ]) ||
+                         // Action 4: Upgrade Center / maintenance / version update
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'appVersion', 'autoUpdateEnabled', 'maintenanceMode', 'updatedAt'
+                         ])
+                       );
+
+      allow delete: if false;
+
+      match /products/{productId} {
+        allow get: if isOwner(userId) && isValidId(productId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(productId) &&
+                         incoming().userId == userId &&
+                         isValidProduct(incoming()) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+        allow update: if isOwner(userId) && isValidId(productId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidProduct(incoming()) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         (
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'name', 'sku', 'barcode', 'category', 'hsnSac', 'unit',
+                             'purchasePrice', 'sellingPrice', 'gstRate', 'stockQty',
+                             'lowStockThreshold', 'imageUri', 'updatedAt'
+                           ])
+                         );
+        allow delete: if isOwner(userId) && isValidId(productId);
+      }
+
+      match /customers/{customerId} {
+        allow get: if isOwner(userId) && isValidId(customerId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(customerId) &&
+                         incoming().userId == userId &&
+                         isValidCustomer(incoming()) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+        allow update: if isOwner(userId) && isValidId(customerId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidCustomer(incoming()) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'name', 'phone', 'address', 'gstin', 'stateName',
+                           'totalPurchases', 'outstandingBalance', 'updatedAt'
+                         ]);
+        allow delete: if isOwner(userId) && isValidId(customerId);
+      }
+
+      match /invoices/{invoiceId} {
+        allow get: if isOwner(userId) && isValidId(invoiceId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(invoiceId) &&
+                         incoming().userId == userId &&
+                         isValidInvoice(incoming()) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+        allow update: if isOwner(userId) && isValidId(invoiceId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().invoiceNumber == existing().invoiceNumber &&
+                         isValidInvoice(incoming()) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         (
+                           // Action 1: Payment status update
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'paidAmount', 'balanceDue', 'paymentStatus', 'paymentMethod', 'upiTransactionRef', 'updatedAt'
+                           ]) ||
+                           // Action 2: Full invoice edit
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'invoiceType', 'taxMode', 'customerId', 'customerName', 'customerPhone',
+                             'customerAddress', 'customerGstin', 'items', 'subtotal', 'discountAmount',
+                             'taxableTotal', 'cgstTotal', 'sgstTotal', 'igstTotal', 'grandTotal',
+                             'paidAmount', 'balanceDue', 'paymentStatus', 'paymentMethod',
+                             'upiTransactionRef', 'notes', 'templateStyle', 'updatedAt'
+                           ])
+                         );
+        allow delete: if isOwner(userId) && isValidId(invoiceId);
+      }
+
+      match /payments/{paymentId} {
+        allow get: if isOwner(userId) && isValidId(paymentId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(paymentId) &&
+                         incoming().userId == userId &&
+                         isValidPaymentRecord(incoming()) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+        allow update: if isOwner(userId) && isValidId(paymentId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().invoiceId == existing().invoiceId &&
+                         isValidPaymentRecord(incoming()) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         // Terminal lock: once VERIFIED, status cannot be downgraded arbitrarily unless FAILED correction
+                         (existing().verificationStatus != 'VERIFIED' || incoming().verificationStatus == 'VERIFIED') &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'transactionRef', 'verificationStatus', 'verifiedByOwner', 'notes', 'upiApp', 'updatedAt'
+                         ]);
+        allow delete: if isOwner(userId) && isValidId(paymentId);
+      }
+
+      match /suppliers/{supplierId} {
+        allow get: if isOwner(userId) && isValidId(supplierId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(supplierId) &&
+                         incoming().userId == userId &&
+                         isValidSupplier(incoming()) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+        allow update: if isOwner(userId) && isValidId(supplierId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidSupplier(incoming()) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'name', 'phone', 'address', 'gstin',
+                           'totalPurchased', 'outstandingPayable', 'updatedAt'
+                         ]);
+        allow delete: if isOwner(userId) && isValidId(supplierId);
+      }
+
+      match /purchases/{purchaseId} {
+        allow get: if isOwner(userId) && isValidId(purchaseId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(purchaseId) &&
+                         incoming().userId == userId &&
+                         isValidPurchaseRecord(incoming()) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+        allow update: if isOwner(userId) && isValidId(purchaseId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidPurchaseRecord(incoming()) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'paidAmount', 'paymentStatus', 'notes', 'updatedAt'
+                         ]);
+        allow delete: if isOwner(userId) && isValidId(purchaseId);
+      }
+
+      match /expenses/{expenseId} {
+        allow get: if isOwner(userId) && isValidId(expenseId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(expenseId) &&
+                         incoming().userId == userId &&
+                         isValidExpense(incoming()) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+        allow update: if isOwner(userId) && isValidId(expenseId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidExpense(incoming()) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'title', 'category', 'amount', 'paymentMode', 'notes', 'expenseEpochMs', 'updatedAt'
+                         ]);
+        allow delete: if isOwner(userId) && isValidId(expenseId);
+      }
+
+      match /stock_adjustments/{adjustmentId} {
+        allow get: if isOwner(userId) && isValidId(adjustmentId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(adjustmentId) &&
+                         incoming().userId == userId &&
+                         isValidStockAdjustment(incoming()) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(adjustmentId);
+      }
+
+      match /staff_users/{staffId} {
+        allow get: if isOwner(userId) && isValidId(staffId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(staffId) &&
+                         incoming().userId == userId &&
+                         isValidStaffUser(incoming()) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+        allow update: if isOwner(userId) && isValidId(staffId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidStaffUser(incoming()) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'name', 'emailOrPhone', 'role', 'canManageBilling',
+                           'canManageInventory', 'canManagePurchases', 'canViewReports', 'active', 'updatedAt'
+                         ]);
+        allow delete: if isOwner(userId) && isValidId(staffId);
+      }
+
+      match /activity_logs/{logId} {
+        allow get: if isOwner(userId) && isValidId(logId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(logId) &&
+                         incoming().userId == userId &&
+                         isValidActivityLog(incoming()) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(logId);
+      }
+
+      match /backups/{backupId} {
+        allow get: if isOwner(userId) && isValidId(backupId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(backupId) &&
+                         incoming().userId == userId &&
+                         isValidBackupRecord(incoming()) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(backupId);
+      }
+
+      match /upgrade_history/{upgradeId} {
+        allow get: if isOwner(userId) && isValidId(upgradeId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(upgradeId) &&
+                         incoming().userId == userId &&
+                         isValidUpgradeHistory(incoming()) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+        allow update: if isOwner(userId) && isValidId(upgradeId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidUpgradeHistory(incoming()) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'releaseNotes', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(upgradeId);
+      }
+
+      match /release_catalog/{releaseId} {
+        allow get: if isOwner(userId) && isValidId(releaseId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(releaseId) &&
+                         incoming().userId == userId &&
+                         isValidReleaseItem(incoming()) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+        allow update: if isOwner(userId) && isValidId(releaseId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidReleaseItem(incoming()) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'title', 'channel', 'securityUpdate', 'features', 'bugFixes', 'updatedAt'
+                         ]);
+        allow delete: if isOwner(userId) && isValidId(releaseId);
+      }
+    }
+  }
+}

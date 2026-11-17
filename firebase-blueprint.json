@@ -1,0 +1,413 @@
+{
+  "entities": {
+    "BusinessConfig": {
+      "title": "BusinessConfig",
+      "description": "Business profile, GST/UPI config, owner security credentials, feature toggles, and upgrade state",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "businessName": { "type": "string" },
+        "businessPhone": { "type": "string" },
+        "businessAddress": { "type": "string" },
+        "gstin": { "type": "string" },
+        "stateName": { "type": "string" },
+        "upiId": { "type": "string" },
+        "upiMerchantName": { "type": "string" },
+        "invoicePrefix": { "type": "string" },
+        "nextInvoiceNumber": { "type": "integer" },
+        "invoiceTemplate": { "type": "string", "enum": ["MODERN", "CLASSIC", "THERMAL"] },
+        "logoUri": { "type": "string" },
+        "ownerPasswordHash": { "type": "string" },
+        "ownerPasswordSalt": { "type": "string" },
+        "mustChangeInitialPassword": { "type": "boolean" },
+        "recoveryPinHash": { "type": "string" },
+        "recoveryHint": { "type": "string" },
+        "twoFactorEnabled": { "type": "boolean" },
+        "twoFactorCode": { "type": "string" },
+        "appVersion": { "type": "string" },
+        "autoUpdateEnabled": { "type": "boolean" },
+        "maintenanceMode": { "type": "boolean" },
+        "voiceBillingEnabled": { "type": "boolean" },
+        "gstBillingEnabled": { "type": "boolean" },
+        "upiQrEnabled": { "type": "boolean" },
+        "purchaseModuleEnabled": { "type": "boolean" },
+        "autoBackupEnabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "businessName", "businessPhone", "businessAddress", "gstin", "stateName",
+        "upiId", "upiMerchantName", "invoicePrefix", "nextInvoiceNumber", "invoiceTemplate",
+        "ownerPasswordHash", "ownerPasswordSalt", "mustChangeInitialPassword",
+        "twoFactorEnabled", "appVersion", "autoUpdateEnabled", "maintenanceMode",
+        "voiceBillingEnabled", "gstBillingEnabled", "upiQrEnabled", "purchaseModuleEnabled",
+        "autoBackupEnabled", "createdAt", "updatedAt"
+      ]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Inventory product with HSN/SAC, barcode, purchase/selling price, GST slab, and stock",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "sku": { "type": "string" },
+        "barcode": { "type": "string" },
+        "category": { "type": "string" },
+        "hsnSac": { "type": "string" },
+        "unit": { "type": "string" },
+        "purchasePrice": { "type": "number" },
+        "sellingPrice": { "type": "number" },
+        "gstRate": { "type": "number" },
+        "stockQty": { "type": "number" },
+        "lowStockThreshold": { "type": "number" },
+        "imageUri": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "name", "sku", "barcode", "category", "hsnSac", "unit",
+        "purchasePrice", "sellingPrice", "gstRate", "stockQty", "lowStockThreshold",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer profile and Khata balance summary",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "gstin": { "type": "string" },
+        "stateName": { "type": "string" },
+        "totalPurchases": { "type": "number" },
+        "outstandingBalance": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "name", "phone", "address", "gstin", "stateName",
+        "totalPurchases", "outstandingBalance", "createdAt", "updatedAt"
+      ]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "GST/Non-GST sales invoice with line items, tax split, and payment status",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "invoiceType": { "type": "string", "enum": ["GST", "NON_GST"] },
+        "taxMode": { "type": "string", "enum": ["INTRA_STATE", "INTER_STATE", "NONE"] },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "customerAddress": { "type": "string" },
+        "customerGstin": { "type": "string" },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "discountAmount": { "type": "number" },
+        "taxableTotal": { "type": "number" },
+        "cgstTotal": { "type": "number" },
+        "sgstTotal": { "type": "number" },
+        "igstTotal": { "type": "number" },
+        "grandTotal": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "balanceDue": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["PAID", "PARTIAL", "UNPAID", "FAILED"] },
+        "paymentMethod": { "type": "string", "enum": ["CASH", "UPI_QR", "BANK", "CREDIT"] },
+        "upiTransactionRef": { "type": "string" },
+        "notes": { "type": "string" },
+        "templateStyle": { "type": "string", "enum": ["MODERN", "CLASSIC", "THERMAL"] },
+        "invoiceEpochMs": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "invoiceNumber", "invoiceType", "taxMode", "customerId", "customerName",
+        "customerPhone", "customerAddress", "customerGstin", "items", "subtotal",
+        "discountAmount", "taxableTotal", "cgstTotal", "sgstTotal", "igstTotal",
+        "grandTotal", "paidAmount", "balanceDue", "paymentStatus", "paymentMethod",
+        "upiTransactionRef", "notes", "templateStyle", "invoiceEpochMs", "createdAt", "updatedAt"
+      ]
+    },
+    "PaymentRecord": {
+      "title": "PaymentRecord",
+      "description": "Payment transaction with explicit verification status and UTR reference",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "invoiceId": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "amount": { "type": "number" },
+        "method": { "type": "string", "enum": ["UPI_QR", "CASH", "BANK"] },
+        "upiApp": { "type": "string" },
+        "upiId": { "type": "string" },
+        "transactionRef": { "type": "string" },
+        "verificationStatus": { "type": "string", "enum": ["PENDING", "VERIFIED", "FAILED"] },
+        "verifiedByOwner": { "type": "boolean" },
+        "notes": { "type": "string" },
+        "paymentEpochMs": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "invoiceId", "invoiceNumber", "customerId", "customerName", "amount",
+        "method", "upiApp", "upiId", "transactionRef", "verificationStatus",
+        "verifiedByOwner", "notes", "paymentEpochMs", "createdAt", "updatedAt"
+      ]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Vendor/Supplier details and payable balance",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "gstin": { "type": "string" },
+        "totalPurchased": { "type": "number" },
+        "outstandingPayable": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "name", "phone", "address", "gstin",
+        "totalPurchased", "outstandingPayable", "createdAt", "updatedAt"
+      ]
+    },
+    "PurchaseRecord": {
+      "title": "PurchaseRecord",
+      "description": "Purchase invoice or purchase return with automatic stock impact",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "purchaseNumber": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "recordType": { "type": "string", "enum": ["PURCHASE", "RETURN"] },
+        "items": { "type": "array" },
+        "taxableTotal": { "type": "number" },
+        "gstTotal": { "type": "number" },
+        "grandTotal": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["PAID", "PARTIAL", "UNPAID"] },
+        "notes": { "type": "string" },
+        "purchaseEpochMs": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "purchaseNumber", "supplierId", "supplierName", "recordType",
+        "items", "taxableTotal", "gstTotal", "grandTotal", "paidAmount",
+        "paymentStatus", "notes", "purchaseEpochMs", "createdAt", "updatedAt"
+      ]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Business operating expense for P&L accounting",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMode": { "type": "string" },
+        "notes": { "type": "string" },
+        "expenseEpochMs": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "title", "category", "amount", "paymentMode",
+        "notes", "expenseEpochMs", "createdAt", "updatedAt"
+      ]
+    },
+    "StockAdjustment": {
+      "title": "StockAdjustment",
+      "description": "Audit trail of product stock changes",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "deltaQty": { "type": "number" },
+        "previousQty": { "type": "number" },
+        "newQty": { "type": "number" },
+        "reason": { "type": "string" },
+        "adjustmentEpochMs": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "productId", "productName", "deltaQty", "previousQty",
+        "newQty", "reason", "adjustmentEpochMs", "createdAt", "updatedAt"
+      ]
+    },
+    "StaffUser": {
+      "title": "StaffUser",
+      "description": "Staff role and granular feature permissions managed by Owner",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "emailOrPhone": { "type": "string" },
+        "role": { "type": "string", "enum": ["OWNER", "MANAGER", "BILLER", "ACCOUNTANT"] },
+        "canManageBilling": { "type": "boolean" },
+        "canManageInventory": { "type": "boolean" },
+        "canManagePurchases": { "type": "boolean" },
+        "canViewReports": { "type": "boolean" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "name", "emailOrPhone", "role", "canManageBilling",
+        "canManageInventory", "canManagePurchases", "canViewReports", "active",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Owner and billing security audit log",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "actor": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "category": { "type": "string" },
+        "logEpochMs": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "actor", "action", "details", "category",
+        "logEpochMs", "createdAt", "updatedAt"
+      ]
+    },
+    "BackupRecord": {
+      "title": "BackupRecord",
+      "description": "Serialized JSON snapshot backup stored in Firestore",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "label": { "type": "string" },
+        "appVersion": { "type": "string" },
+        "recordCount": { "type": "integer" },
+        "payloadJson": { "type": "string" },
+        "backupEpochMs": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "label", "appVersion", "recordCount", "payloadJson",
+        "backupEpochMs", "createdAt", "updatedAt"
+      ]
+    },
+    "UpgradeHistory": {
+      "title": "UpgradeHistory",
+      "description": "Version upgrade, security patch, and rollback history",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "fromVersion": { "type": "string" },
+        "toVersion": { "type": "string" },
+        "status": { "type": "string", "enum": ["SUCCESS", "ROLLED_BACK", "FAILED"] },
+        "releaseNotes": { "type": "string" },
+        "backupId": { "type": "string" },
+        "upgradeEpochMs": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "fromVersion", "toVersion", "status", "releaseNotes",
+        "backupId", "upgradeEpochMs", "createdAt", "updatedAt"
+      ]
+    },
+    "ReleaseItem": {
+      "title": "ReleaseItem",
+      "description": "Available software release metadata in the Upgrade Center",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "version": { "type": "string" },
+        "title": { "type": "string" },
+        "channel": { "type": "string" },
+        "securityUpdate": { "type": "boolean" },
+        "features": { "type": "string" },
+        "bugFixes": { "type": "string" },
+        "releaseEpochMs": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "version", "title", "channel", "securityUpdate",
+        "features", "bugFixes", "releaseEpochMs", "createdAt", "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/BusinessConfig" },
+      "description": "Per-user business configuration and owner security settings"
+    },
+    "/users/{userId}/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Inventory product catalog"
+    },
+    "/users/{userId}/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "Customer directory and Khata balances"
+    },
+    "/users/{userId}/invoices/{invoiceId}": {
+      "schema": { "$ref": "#/entities/Invoice" },
+      "description": "Sales invoices"
+    },
+    "/users/{userId}/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/PaymentRecord" },
+      "description": "Invoice payment and UPI verification records"
+    },
+    "/users/{userId}/suppliers/{supplierId}": {
+      "schema": { "$ref": "#/entities/Supplier" },
+      "description": "Suppliers directory"
+    },
+    "/users/{userId}/purchases/{purchaseId}": {
+      "schema": { "$ref": "#/entities/PurchaseRecord" },
+      "description": "Purchase invoices and returns"
+    },
+    "/users/{userId}/expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/Expense" },
+      "description": "Business expense records"
+    },
+    "/users/{userId}/stock_adjustments/{adjustmentId}": {
+      "schema": { "$ref": "#/entities/StockAdjustment" },
+      "description": "Stock adjustment audit logs"
+    },
+    "/users/{userId}/staff_users/{staffId}": {
+      "schema": { "$ref": "#/entities/StaffUser" },
+      "description": "Staff roles and access permissions"
+    },
+    "/users/{userId}/activity_logs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Owner activity audit trail"
+    },
+    "/users/{userId}/backups/{backupId}": {
+      "schema": { "$ref": "#/entities/BackupRecord" },
+      "description": "Cloud data backups"
+    },
+    "/users/{userId}/upgrade_history/{upgradeId}": {
+      "schema": { "$ref": "#/entities/UpgradeHistory" },
+      "description": "App upgrade and rollback logs"
+    },
+    "/users/{userId}/release_catalog/{releaseId}": {
+      "schema": { "$ref": "#/entities/ReleaseItem" },
+      "description": "Software update release feed"
+    }
+  }
+}
