@@ -326,7 +326,7 @@ fun OwnerUpgradeCenterTab(
                     ) {
                         Column {
                             Text(
-                                "BharatBill Upgrade Center",
+                                "Maya Bill App Upgrade Center",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -663,13 +663,13 @@ fun OwnerBackupLogsTab(
 private fun shareBackupJson(context: Context, backup: BackupRecord, onShowMessage: (String) -> Unit) {
     try {
         val dir = File(context.cacheDir, "backups").apply { mkdirs() }
-        val file = File(dir, "BharatBill_Backup_${backup.id}.json")
+        val file = File(dir, "MayaBill_Backup_${backup.id}.json")
         file.writeText(backup.payloadJson)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "application/json"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "BharatBill Cloud Backup: ${backup.label}")
+            putExtra(Intent.EXTRA_SUBJECT, "Maya Bill App Cloud Backup: ${backup.label}")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(intent, "Export Backup JSON"))

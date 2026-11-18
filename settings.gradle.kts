@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "BharatBill"
+rootProject.name = "MayaBillApp"
 
 include(":app")

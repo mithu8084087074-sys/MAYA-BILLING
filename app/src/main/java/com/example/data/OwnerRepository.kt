@@ -96,11 +96,12 @@ class OwnerRepository(
             if (!snap.exists()) {
                 val initialConfig = BusinessConfig(
                     userId = uid,
-                    businessName = defaultName.ifBlank { "BharatBill Enterprises" },
-                    upiMerchantName = defaultName.ifBlank { "BharatBill Enterprises" },
+                    businessName = defaultName.ifBlank { "Maya Bill Store" },
+                    upiMerchantName = defaultName.ifBlank { "Maya Bill Store" },
                     ownerPasswordHash = SecurityUtils.INITIAL_OWNER_PASSWORD_HASH,
                     ownerPasswordSalt = SecurityUtils.INITIAL_OWNER_SALT,
                     mustChangeInitialPassword = true,
+                    profileCompleted = false,
                     appVersion = "2.4.0"
                 )
                 ref.set(initialConfig.toCreateMap(uid)).await()
@@ -108,7 +109,7 @@ class OwnerRepository(
                 val ownerStaff = StaffUser(
                     userId = uid,
                     name = defaultName.ifBlank { "Store Owner" },
-                    emailOrPhone = auth.currentUser?.email ?: "owner@bharatbill.in",
+                    emailOrPhone = auth.currentUser?.email ?: "owner@mayabill.in",
                     role = "OWNER",
                     canManageBilling = true,
                     canManageInventory = true,
@@ -143,7 +144,7 @@ class OwnerRepository(
                 id = "rel_2_4_0",
                 userId = uid,
                 version = "2.4.0",
-                title = "BharatBill Core GST & Voice Suite",
+                title = "Maya Bill App Core GST & Voice Suite",
                 channel = "STABLE",
                 securityUpdate = false,
                 features = "GST/Non-GST invoicing, Hindi & English Voice Billing, NPCI Dynamic UPI QR verification.",
@@ -209,11 +210,14 @@ class OwnerRepository(
             val ref = userDoc(uid)
             path = ref.path
             val updates = mutableMapOf<String, Any>(
-                "businessName" to config.businessName.ifBlank { "BharatBill Enterprises" }.take(100),
+                "businessName" to config.businessName.ifBlank { "Maya Bill Store" }.take(100),
                 "businessPhone" to config.businessPhone.take(25),
                 "businessAddress" to config.businessAddress.take(250),
                 "gstin" to config.gstin.uppercase().take(20),
                 "stateName" to config.stateName.take(60),
+                "gstEntityDetails" to config.gstEntityDetails.take(250),
+                "ownerSignatureStrokes" to config.ownerSignatureStrokes.take(12000),
+                "profileCompleted" to config.profileCompleted,
                 "upiId" to config.upiId.trim().take(100),
                 "upiMerchantName" to config.upiMerchantName.ifBlank { config.businessName }.take(100),
                 "invoicePrefix" to config.invoicePrefix.ifBlank { "INV" }.take(15),
@@ -227,7 +231,7 @@ class OwnerRepository(
             )
             config.logoUri?.let { updates["logoUri"] = it.take(500) }
             ref.update(updates).await()
-            logActivityInternal(uid, "Owner", "Updated Business Settings", "Updated GST/UPI/Template/Feature settings", "SETTINGS")
+            logActivityInternal(uid, "Owner", "Updated Business Settings", "Updated Business Profile, Signature, GST/UPI & Settings", "SETTINGS")
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e

@@ -20,6 +20,8 @@ class PreferencesManager(private val context: Context) {
     private val themeKey = stringPreferencesKey("theme_mode")
     private val langKey = stringPreferencesKey("app_language")
     private val ownerSessionExpiryKey = longPreferencesKey("owner_session_expiry_ms")
+    private val pendingPhoneKey = stringPreferencesKey("pending_login_phone")
+    private val pendingGstinKey = stringPreferencesKey("pending_login_gstin")
 
     val themeModeFlow: Flow<ThemeMode> = context.dataStore.data.map { prefs ->
         val raw = prefs[themeKey] ?: ThemeMode.SYSTEM.name
@@ -35,6 +37,14 @@ class PreferencesManager(private val context: Context) {
         prefs[ownerSessionExpiryKey] ?: 0L
     }
 
+    val pendingPhoneFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[pendingPhoneKey] ?: ""
+    }
+
+    val pendingGstinFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[pendingGstinKey] ?: ""
+    }
+
     suspend fun setThemeMode(mode: ThemeMode) {
         context.dataStore.edit { it[themeKey] = mode.name }
     }
@@ -45,5 +55,19 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setOwnerSessionExpiry(epochMs: Long) {
         context.dataStore.edit { it[ownerSessionExpiryKey] = epochMs }
+    }
+
+    suspend fun setPendingLoginInputs(phone: String, gstin: String) {
+        context.dataStore.edit {
+            it[pendingPhoneKey] = phone.trim()
+            it[pendingGstinKey] = gstin.trim().uppercase()
+        }
+    }
+
+    suspend fun clearPendingLoginInputs() {
+        context.dataStore.edit {
+            it.remove(pendingPhoneKey)
+            it.remove(pendingGstinKey)
+        }
     }
 }

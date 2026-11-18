@@ -1,10 +1,14 @@
 package com.example
 
+import com.example.ui.components.SignatureSerializer
 import com.example.util.BillingCalculator
+import com.example.util.GstinHelper
 import com.example.util.SecurityUtils
 import com.example.util.UpiQrGenerator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -66,7 +70,7 @@ class BillingCalculatorTest {
     fun `UPI QR URI contains exact merchant VPA and invoice amount`() {
         val uri = UpiQrGenerator.buildUpiUri(
             upiId = "merchant@okaxis",
-            merchantName = "BharatBill Store",
+            merchantName = "Maya Bill Store",
             amount = 1750.5,
             invoiceNumber = "INV-1001",
             transactionRef = "INV-1001"
@@ -84,5 +88,32 @@ class BillingCalculatorTest {
         val hash = SecurityUtils.hashSecret("MySecureStore#2026", salt)
         assertTrue(SecurityUtils.verifySecret("MySecureStore#2026", salt, hash))
         assertFalse(SecurityUtils.verifySecret("WrongPass", salt, hash))
+    }
+
+    @Test
+    fun `GSTIN decoder extracts state name, PAN, and taxpayer entity type`() {
+        val decoded = GstinHelper.decode("27AABCU9603R1ZM")
+        assertNotNull(decoded)
+        assertEquals("Maharashtra", decoded?.stateName)
+        assertEquals("27", decoded?.stateCode)
+        assertEquals("AABCU9603R", decoded?.panNumber)
+        assertEquals("Company (Pvt Ltd / Ltd)", decoded?.entityType)
+        assertNull(GstinHelper.decode("INVALIDGST"))
+        assertTrue(GstinHelper.isValidIndianPhone("9876543210"))
+        assertFalse(GstinHelper.isValidIndianPhone("12345"))
+    }
+
+    @Test
+    fun `signature serializer encodes and decodes normalized strokes accurately`() {
+        val original = listOf(
+            listOf(0.1f to 0.5f, 0.4f to 0.3f),
+            listOf(0.55f to 0.6f, 0.85f to 0.45f)
+        )
+        val encoded = SignatureSerializer.encode(original)
+        val decoded = SignatureSerializer.decode(encoded)
+        assertEquals(2, decoded.size)
+        assertEquals(2, decoded[0].size)
+        assertEquals(0.1f, decoded[0][0].first, 0.01f)
+        assertEquals(0.45f, decoded[1][1].second, 0.01f)
     }
 }

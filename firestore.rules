@@ -49,6 +49,7 @@ service cloud.firestore {
     function isValidBusinessConfig(data) {
       return data.keys().hasAll([
         'userId', 'businessName', 'businessPhone', 'businessAddress', 'gstin', 'stateName',
+        'gstEntityDetails', 'ownerSignatureStrokes', 'profileCompleted',
         'upiId', 'upiMerchantName', 'invoicePrefix', 'nextInvoiceNumber', 'invoiceTemplate',
         'ownerPasswordHash', 'ownerPasswordSalt', 'mustChangeInitialPassword',
         'twoFactorEnabled', 'appVersion', 'autoUpdateEnabled', 'maintenanceMode',
@@ -57,6 +58,7 @@ service cloud.firestore {
       ]) &&
       data.keys().hasOnly([
         'userId', 'businessName', 'businessPhone', 'businessAddress', 'gstin', 'stateName',
+        'gstEntityDetails', 'ownerSignatureStrokes', 'profileCompleted',
         'upiId', 'upiMerchantName', 'invoicePrefix', 'nextInvoiceNumber', 'invoiceTemplate',
         'logoUri', 'ownerPasswordHash', 'ownerPasswordSalt', 'mustChangeInitialPassword',
         'recoveryPinHash', 'recoveryHint', 'twoFactorEnabled', 'twoFactorCode',
@@ -70,6 +72,9 @@ service cloud.firestore {
       isBoundedStr(data.businessAddress, 0, 250) &&
       isBoundedStr(data.gstin, 0, 20) &&
       isBoundedStr(data.stateName, 0, 60) &&
+      isBoundedStr(data.gstEntityDetails, 0, 250) &&
+      isBoundedStr(data.ownerSignatureStrokes, 0, 12000) &&
+      data.profileCompleted is bool &&
       isBoundedStr(data.upiId, 0, 100) &&
       isBoundedStr(data.upiMerchantName, 0, 100) &&
       isBoundedStr(data.invoicePrefix, 1, 15) &&
@@ -403,9 +408,10 @@ service cloud.firestore {
                        isValidBusinessConfig(incoming()) &&
                        isValidTimestamp(incoming().updatedAt) &&
                        (
-                         // Action 1: Business profile & GST/UPI/Template settings update
+                         // Action 1: Business profile, owner signature & GST/UPI/Template settings update
                          incoming().diff(existing()).affectedKeys().hasOnly([
                            'businessName', 'businessPhone', 'businessAddress', 'gstin', 'stateName',
+                           'gstEntityDetails', 'ownerSignatureStrokes', 'profileCompleted',
                            'upiId', 'upiMerchantName', 'invoicePrefix', 'invoiceTemplate', 'logoUri',
                            'voiceBillingEnabled', 'gstBillingEnabled', 'upiQrEnabled', 'purchaseModuleEnabled',
                            'autoBackupEnabled', 'updatedAt'

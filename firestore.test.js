@@ -79,6 +79,9 @@ test("BusinessConfig: create, profile update, password update, and ghost-field r
       businessAddress: "MG Road, Bengaluru",
       gstin: "29ABCDE1234F1Z5",
       stateName: "Karnataka",
+      gstEntityDetails: "PAN: ABCDE1234F • State: Karnataka (29) • Company (Pvt Ltd / Ltd)",
+      ownerSignatureStrokes: "0.100,0.500;0.400,0.400|0.500,0.550;0.800,0.450",
+      profileCompleted: true,
       upiId: "sharma@okicici",
       upiMerchantName: "Sharma Electronics",
       invoicePrefix: "INV",
@@ -101,10 +104,12 @@ test("BusinessConfig: create, profile update, password update, and ghost-field r
     })
   );
 
-  // Action 1: Business settings update
+  // Action 1: Business settings & signature update
   await assertSucceeds(
     aliceDb.collection("users").doc(ALICE_UID).update({
       businessName: "Sharma Electricals & Appliances",
+      ownerSignatureStrokes: "0.150,0.600;0.750,0.350",
+      profileCompleted: true,
       upiId: "sharma.biz@ybl",
       updatedAt: pastDate(1000),
     })

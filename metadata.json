@@ -1,5 +1,5 @@
 {
-  "name": "BharatBill",
+  "name": "Maya Bill App",
   "description": "Professional Indian GST & Voice Billing Software with Dynamic UPI QR Payments, Inventory, Customer Khata, Purchase Management, Reports & Owner Admin Dashboard.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

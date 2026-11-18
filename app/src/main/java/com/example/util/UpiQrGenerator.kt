@@ -29,7 +29,7 @@ object UpiQrGenerator {
         transactionRef: String
     ): String {
         val cleanVpa = upiId.trim()
-        val encodedName = URLEncoder.encode(merchantName.ifBlank { "BharatBill Store" }, "UTF-8")
+        val encodedName = URLEncoder.encode(merchantName.ifBlank { "Maya Bill Store" }, "UTF-8")
         val encodedNote = URLEncoder.encode("Bill $invoiceNumber", "UTF-8")
         val encodedRef = URLEncoder.encode(transactionRef, "UTF-8")
         val formattedAmount = String.format(Locale.US, "%.2f", amount.coerceAtLeast(0.01))

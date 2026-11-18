@@ -31,12 +31,12 @@ object ReportExporter {
         payments: List<PaymentRecord>
     ): File {
         val dir = File(context.cacheDir, "reports").apply { mkdirs() }
-        val file = File(dir, "BharatBill_Report_${periodLabel.replace(" ", "_")}.csv")
+        val file = File(dir, "MayaBill_Report_${periodLabel.replace(" ", "_")}.csv")
 
         val sb = StringBuilder()
         // UTF-8 BOM for clean Excel opening
         sb.append('\uFEFF')
-        sb.appendLine("${business.businessName.ifBlank { "BharatBill" }} - $periodLabel Financial & GST Report")
+        sb.appendLine("${business.businessName.ifBlank { "Maya Bill App" }} - $periodLabel Financial & GST Report")
         sb.appendLine("Generated,${BillingCalculator.formatDate(System.currentTimeMillis())}")
         sb.appendLine()
 
@@ -113,7 +113,7 @@ object ReportExporter {
         customers: List<Customer>
     ): File {
         val dir = File(context.cacheDir, "reports").apply { mkdirs() }
-        val file = File(dir, "BharatBill_Summary_${periodLabel.replace(" ", "_")}.pdf")
+        val file = File(dir, "MayaBill_Summary_${periodLabel.replace(" ", "_")}.pdf")
 
         val doc = PdfDocument()
         val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
@@ -137,7 +137,7 @@ object ReportExporter {
         }
 
         var y = 48f
-        canvas.drawText("${business.businessName.ifBlank { "BharatBill" }} — $periodLabel Report", 36f, y, headerPaint)
+        canvas.drawText("${business.businessName.ifBlank { "Maya Bill App" }} — $periodLabel Report", 36f, y, headerPaint)
         y += 20f
         canvas.drawText("GSTIN: ${business.gstin.ifBlank { "N/A" }} | Generated: ${BillingCalculator.formatDate(System.currentTimeMillis())}", 36f, y, textPaint)
         y += 30f

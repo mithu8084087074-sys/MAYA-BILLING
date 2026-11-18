@@ -63,7 +63,9 @@ import com.example.model.BusinessConfig
 import com.example.model.ReleaseItem
 import com.example.model.StaffUser
 import com.example.model.UpgradeHistory
+import com.example.ui.components.SignaturePadCard
 import com.example.ui.theme.MonoFontFamily
+import com.example.util.GstinHelper
 import com.example.viewmodel.BillingWorkspaceData
 import com.example.viewmodel.OwnerAdminState
 
@@ -460,6 +462,8 @@ private fun BusinessSettingsTab(
     var address by remember(config.businessAddress) { mutableStateOf(config.businessAddress) }
     var gstin by remember(config.gstin) { mutableStateOf(config.gstin) }
     var stateName by remember(config.stateName) { mutableStateOf(config.stateName) }
+    var gstEntityDetails by remember(config.gstEntityDetails) { mutableStateOf(config.gstEntityDetails) }
+    var ownerSignatureStrokes by remember(config.ownerSignatureStrokes) { mutableStateOf(config.ownerSignatureStrokes) }
     var upiId by remember(config.upiId) { mutableStateOf(config.upiId) }
     var upiMerchant by remember(config.upiMerchantName) { mutableStateOf(config.upiMerchantName) }
     var invoicePrefix by remember(config.invoicePrefix) { mutableStateOf(config.invoicePrefix) }
@@ -489,7 +493,7 @@ private fun BusinessSettingsTab(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Business Profile & Logo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Business Profile, GST & Owner Signature", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -518,10 +522,36 @@ private fun BusinessSettingsTab(
                     OutlinedTextField(value = businessName, onValueChange = { businessName = it }, label = { Text("Business / Store Name") }, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("Business Phone") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = address, onValueChange = { address = it }, label = { Text("Registered Address") }, modifier = Modifier.fillMaxWidth())
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(value = gstin, onValueChange = { gstin = it.uppercase() }, label = { Text("GSTIN") }, modifier = Modifier.weight(1f))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = gstin,
+                            onValueChange = {
+                                val upper = it.uppercase().take(15)
+                                gstin = upper
+                                GstinHelper.decode(upper)?.let { d ->
+                                    stateName = d.stateName
+                                    gstEntityDetails = d.registrationSummary
+                                }
+                            },
+                            label = { Text("GSTIN (15-Digit)") },
+                            modifier = Modifier.weight(1.2f)
+                        )
                         OutlinedTextField(value = stateName, onValueChange = { stateName = it }, label = { Text("State") }, modifier = Modifier.weight(1f))
                     }
+                    OutlinedTextField(
+                        value = gstEntityDetails,
+                        onValueChange = { gstEntityDetails = it },
+                        label = { Text("Business / GST Details (PAN & Entity)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    HorizontalDivider()
+                    SignaturePadCard(
+                        encodedStrokes = ownerSignatureStrokes,
+                        onStrokesChanged = { ownerSignatureStrokes = it }
+                    )
                 }
             }
         }
@@ -594,6 +624,9 @@ private fun BusinessSettingsTab(
                             businessAddress = address,
                             gstin = gstin,
                             stateName = stateName,
+                            gstEntityDetails = gstEntityDetails,
+                            ownerSignatureStrokes = ownerSignatureStrokes,
+                            profileCompleted = true,
                             upiId = upiId,
                             upiMerchantName = upiMerchant,
                             invoicePrefix = invoicePrefix,

@@ -118,7 +118,7 @@ fun ReportsScreen(
                             filteredInvoices, filteredPurchases, filteredExpenses,
                             workspace.products, workspace.customers
                         )
-                        ReportExporter.shareReportFile(context, pdf, "application/pdf", "BharatBill $selectedPeriod Report (PDF)")
+                        ReportExporter.shareReportFile(context, pdf, "application/pdf", "Maya Bill App $selectedPeriod Report (PDF)")
                     },
                     modifier = Modifier.weight(1f).height(48.dp).testTag("export_report_pdf_button")
                 ) {
@@ -133,7 +133,7 @@ fun ReportsScreen(
                             filteredInvoices, filteredPurchases, filteredExpenses,
                             workspace.products, workspace.customers, filteredPayments
                         )
-                        ReportExporter.shareReportFile(context, csv, "text/csv", "BharatBill $selectedPeriod Report (Excel CSV)")
+                        ReportExporter.shareReportFile(context, csv, "text/csv", "Maya Bill App $selectedPeriod Report (Excel CSV)")
                     },
                     modifier = Modifier.weight(1f).height(48.dp).testTag("export_report_excel_button")
                 ) {

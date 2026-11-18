@@ -3,9 +3,11 @@ package com.example.util
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
@@ -19,9 +21,11 @@ import android.print.PrintDocumentAdapter
 import android.print.PrintDocumentInfo
 import android.print.PrintManager
 import androidx.core.content.FileProvider
+import com.example.R
 import com.example.model.BusinessConfig
 import com.example.model.Invoice
 import com.example.model.PaymentRecord
+import com.example.ui.components.SignatureSerializer
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -29,7 +33,13 @@ import java.net.URLEncoder
 
 object PdfInvoiceGenerator {
 
-    internal const val PDF_SIDE_BRANDING = "MAYA BILLING APP"
+    internal const val PDF_SIDE_BRANDING = "MAYA BILL APP"
+
+    private fun loadAppLogoBitmap(context: Context): Bitmap? = try {
+        BitmapFactory.decodeResource(context.resources, R.drawable.img_store_logo)
+    } catch (_: Exception) {
+        null
+    }
 
     fun generateInvoicePdf(
         context: Context,
@@ -42,7 +52,8 @@ object PdfInvoiceGenerator {
 
         val isThermal = invoice.templateStyle == "THERMAL"
         val pageWidth = if (isThermal) 320 else 595
-        val pageHeight = if (isThermal) (560 + invoice.items.size * 34).coerceAtLeast(620) else 842
+        val pageHeight = if (isThermal) (640 + invoice.items.size * 34).coerceAtLeast(680) else 842
+        val appLogo = loadAppLogoBitmap(context)
 
         val document = PdfDocument()
         val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
@@ -50,7 +61,7 @@ object PdfInvoiceGenerator {
         val canvas = page.canvas
 
         if (isThermal) {
-            drawThermalTemplate(canvas, pageWidth, pageHeight, invoice, business)
+            drawThermalTemplate(canvas, pageWidth, pageHeight, invoice, business, appLogo)
         } else {
             drawA4Template(
                 canvas = canvas,
@@ -58,6 +69,7 @@ object PdfInvoiceGenerator {
                 height = pageHeight,
                 invoice = invoice,
                 business = business,
+                appLogo = appLogo,
                 isModern = invoice.templateStyle != "CLASSIC"
             )
         }
@@ -67,6 +79,7 @@ object PdfInvoiceGenerator {
             document.writeTo(out)
         }
         document.close()
+        appLogo?.recycle()
         return file
     }
 
@@ -76,6 +89,7 @@ object PdfInvoiceGenerator {
         height: Int,
         invoice: Invoice,
         business: BusinessConfig,
+        appLogo: Bitmap?,
         isModern: Boolean
     ) {
         val primaryColor = if (isModern) Color.rgb(12, 43, 71) else Color.rgb(30, 41, 59)
@@ -83,9 +97,10 @@ object PdfInvoiceGenerator {
         val bgPaint = Paint().apply { color = Color.WHITE }
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
+        val headerHeight = 122f
         val headerPaint = Paint().apply { color = primaryColor }
         if (isModern) {
-            canvas.drawRect(0f, 0f, width.toFloat(), 108f, headerPaint)
+            canvas.drawRect(0f, 0f, width.toFloat(), headerHeight, headerPaint)
         } else {
             val borderPaint = Paint().apply {
                 color = primaryColor
@@ -97,12 +112,12 @@ object PdfInvoiceGenerator {
 
         val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = if (isModern) Color.WHITE else primaryColor
-            textSize = 20f
+            textSize = 19f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
         val subHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = if (isModern) Color.rgb(226, 232, 240) else Color.DKGRAY
-            textSize = 10.5f
+            textSize = 10f
         }
         val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(100, 116, 139)
@@ -121,20 +136,32 @@ object PdfInvoiceGenerator {
 
         val leftX = 36f
         val rightX = width - 36f
-        var y = if (isModern) 38f else 50f
+        var y = if (isModern) 34f else 48f
 
-        canvas.drawText(business.businessName.ifBlank { "BharatBill Store" }, leftX, y, titlePaint)
+        // 1. Business Name, Address/Details, Phone & GSTIN at Top
+        canvas.drawText(business.businessName.ifBlank { "Maya Bill Store" }, leftX, y, titlePaint)
         y += 16f
         if (business.businessAddress.isNotBlank()) {
-            canvas.drawText(business.businessAddress.take(62), leftX, y, subHeaderPaint)
+            canvas.drawText(business.businessAddress.take(64), leftX, y, subHeaderPaint)
             y += 14f
         }
         val contactLine = buildString {
-            if (business.businessPhone.isNotBlank()) append("Ph: ${business.businessPhone}  ")
+            if (business.businessPhone.isNotBlank()) append("Phone: ${business.businessPhone}  ")
             if (business.gstin.isNotBlank()) append("GSTIN: ${business.gstin}")
         }
         if (contactLine.isNotBlank()) {
             canvas.drawText(contactLine, leftX, y, subHeaderPaint)
+            y += 14f
+        }
+        val extraDetails = buildString {
+            if (business.stateName.isNotBlank()) append("State: ${business.stateName}")
+            if (business.gstEntityDetails.isNotBlank()) {
+                if (isNotEmpty()) append(" • ")
+                append(business.gstEntityDetails.take(56))
+            }
+        }
+        if (extraDetails.isNotBlank()) {
+            canvas.drawText(extraDetails, leftX, y, subHeaderPaint)
         }
 
         val badgeText = if (invoice.invoiceType == "GST") "TAX INVOICE" else "BILL OF SUPPLY"
@@ -144,32 +171,33 @@ object PdfInvoiceGenerator {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.RIGHT
         }
-        canvas.drawText(badgeText, rightX, if (isModern) 42f else 52f, badgePaint)
+        canvas.drawText(badgeText, rightX, if (isModern) 38f else 50f, badgePaint)
         val invNumPaint = Paint(subHeaderPaint).apply { textAlign = Paint.Align.RIGHT }
-        canvas.drawText("#${invoice.invoiceNumber}", rightX, if (isModern) 60f else 70f, invNumPaint)
+        canvas.drawText("#${invoice.invoiceNumber}", rightX, if (isModern) 56f else 68f, invNumPaint)
         canvas.drawText(
             BillingCalculator.formatShortDate(invoice.invoiceEpochMs),
             rightX,
-            if (isModern) 76f else 86f,
+            if (isModern) 72f else 84f,
             invNumPaint
         )
 
-        y = 132f
-        canvas.drawText("BILL TO", leftX, y, labelPaint)
+        // 2. Customer Details Directly Below Business Section
+        y = 142f
+        canvas.drawText("CUSTOMER DETAILS (BILL TO)", leftX, y, labelPaint)
         canvas.drawText("PAYMENT STATUS", 370f, y, labelPaint)
         y += 16f
         canvas.drawText(invoice.customerName, leftX, y, boldPaint)
         canvas.drawText("${invoice.paymentStatus} (${invoice.paymentMethod})", 370f, y, boldPaint)
         y += 14f
         if (invoice.customerPhone.isNotBlank()) {
-            canvas.drawText("Mobile: ${invoice.customerPhone}", leftX, y, textPaint)
+            canvas.drawText("Phone: ${invoice.customerPhone}", leftX, y, textPaint)
         }
         if (invoice.upiTransactionRef.isNotBlank()) {
             canvas.drawText("Ref: ${invoice.upiTransactionRef}", 370f, y, textPaint)
         }
         y += 14f
         if (invoice.customerAddress.isNotBlank()) {
-            canvas.drawText(invoice.customerAddress.take(55), leftX, y, textPaint)
+            canvas.drawText("Address: ${invoice.customerAddress.take(52)}", leftX, y, textPaint)
             y += 14f
         }
         if (invoice.customerGstin.isNotBlank()) {
@@ -177,15 +205,17 @@ object PdfInvoiceGenerator {
             y += 14f
         }
 
-        y += 12f
+        // 3. Complete Products, Discount & Totals Table
+        y += 10f
         val tableHeaderPaint = Paint().apply { color = Color.rgb(241, 245, 249) }
         canvas.drawRect(leftX, y, rightX, y + 24f, tableHeaderPaint)
         val thText = Paint(labelPaint).apply { color = primaryColor }
         canvas.drawText("#", leftX + 6f, y + 16f, thText)
-        canvas.drawText("ITEM / HSN", leftX + 26f, y + 16f, thText)
-        canvas.drawText("QTY", 285f, y + 16f, thText)
-        canvas.drawText("RATE", 335f, y + 16f, thText)
-        canvas.drawText("GST", 415f, y + 16f, thText)
+        canvas.drawText("PRODUCT / HSN", leftX + 26f, y + 16f, thText)
+        canvas.drawText("QTY", 250f, y + 16f, thText)
+        canvas.drawText("RATE", 300f, y + 16f, thText)
+        canvas.drawText("DISC", 358f, y + 16f, thText)
+        canvas.drawText("GST", 412f, y + 16f, thText)
         val rightBold = Paint(thText).apply { textAlign = Paint.Align.RIGHT }
         canvas.drawText("TOTAL", rightX - 6f, y + 16f, rightBold)
         y += 38f
@@ -196,22 +226,34 @@ object PdfInvoiceGenerator {
         }
         val rightText = Paint(textPaint).apply { textAlign = Paint.Align.RIGHT }
 
-        invoice.items.take(18).forEachIndexed { idx, item ->
+        var totalItemDiscounts = 0.0
+        invoice.items.take(16).forEachIndexed { idx, item ->
+            val grossLine = item.qty * item.unitPrice
+            val itemDiscAmt = grossLine * (item.discountPercent.coerceIn(0.0, 100.0) / 100.0)
+            totalItemDiscounts += itemDiscAmt
+
             canvas.drawText("${idx + 1}", leftX + 6f, y, textPaint)
-            val label = if (item.hsnSac.isNotBlank()) "${item.name.take(26)} (${item.hsnSac})" else item.name.take(32)
+            val label = if (item.hsnSac.isNotBlank()) "${item.name.take(24)} (${item.hsnSac})" else item.name.take(30)
             canvas.drawText(label, leftX + 26f, y, textPaint)
-            canvas.drawText("${item.qty} ${item.unit}", 285f, y, textPaint)
-            canvas.drawText("%.2f".format(item.unitPrice), 335f, y, textPaint)
+            canvas.drawText("${item.qty} ${item.unit}", 250f, y, textPaint)
+            canvas.drawText("%.2f".format(item.unitPrice), 300f, y, textPaint)
+            canvas.drawText(
+                if (item.discountPercent > 0) "%.0f%%".format(item.discountPercent) else "-",
+                358f,
+                y,
+                textPaint
+            )
             val taxVal = item.cgst + item.sgst + item.igst
-            canvas.drawText("%.0f%% (%.1f)".format(item.gstRate, taxVal), 415f, y, textPaint)
+            canvas.drawText("%.0f%% (%.1f)".format(item.gstRate, taxVal), 412f, y, textPaint)
             canvas.drawText(BillingCalculator.formatInr(item.total), rightX - 6f, y, rightText)
             y += 8f
             canvas.drawLine(leftX, y, rightX, y, linePaint)
             y += 18f
         }
 
-        y += 10f
-        // QR Code on bottom-left if UPI ID configured
+        val combinedDiscount = totalItemDiscounts + invoice.discountAmount
+        y += 8f
+        // QR Code below items on left
         if (business.upiId.isNotBlank() && business.upiQrEnabled) {
             val qrAmt = if (invoice.balanceDue > 0.0) invoice.balanceDue else invoice.grandTotal
             val upiUri = UpiQrGenerator.buildUpiUri(
@@ -221,30 +263,29 @@ object PdfInvoiceGenerator {
                 invoiceNumber = invoice.invoiceNumber,
                 transactionRef = invoice.invoiceNumber
             )
-            val qrBitmap = UpiQrGenerator.generateQrBitmap(upiUri, 220)
+            val qrBitmap = UpiQrGenerator.generateQrBitmap(upiUri, 200)
             if (qrBitmap != null) {
                 canvas.drawText("SCAN TO PAY VIA UPI", leftX, y, labelPaint)
-                val destRect = Rect(leftX.toInt(), (y + 8).toInt(), (leftX + 104).toInt(), (y + 112).toInt())
+                val destRect = Rect(leftX.toInt(), (y + 6).toInt(), (leftX + 94).toInt(), (y + 100).toInt())
                 canvas.drawBitmap(qrBitmap, null, destRect, null)
-                canvas.drawText("UPI: ${business.upiId}", leftX, y + 126f, textPaint)
+                canvas.drawText("UPI: ${business.upiId}", leftX, y + 114f, textPaint)
             }
         }
 
-        // Totals on bottom-right
-        val totalsX = 360f
+        // Totals & Discount Summary on right
+        val totalsX = 352f
         var ty = y
         fun drawTotalRow(label: String, value: String, bold: Boolean = false) {
             val p = if (bold) boldPaint else textPaint
             val rp = Paint(p).apply { textAlign = Paint.Align.RIGHT }
             canvas.drawText(label, totalsX, ty, p)
             canvas.drawText(value, rightX - 6f, ty, rp)
-            ty += 18f
+            ty += 17f
         }
 
+        drawTotalRow("Items Subtotal", BillingCalculator.formatInr(invoice.subtotal))
+        drawTotalRow("Total Discount", "- ${BillingCalculator.formatInr(combinedDiscount)}")
         drawTotalRow("Taxable Value", BillingCalculator.formatInr(invoice.taxableTotal))
-        if (invoice.discountAmount > 0) {
-            drawTotalRow("Discount", "- ${BillingCalculator.formatInr(invoice.discountAmount)}")
-        }
         if (invoice.cgstTotal > 0 || invoice.sgstTotal > 0) {
             drawTotalRow("CGST", BillingCalculator.formatInr(invoice.cgstTotal))
             drawTotalRow("SGST", BillingCalculator.formatInr(invoice.sgstTotal))
@@ -252,7 +293,7 @@ object PdfInvoiceGenerator {
         if (invoice.igstTotal > 0) {
             drawTotalRow("IGST", BillingCalculator.formatInr(invoice.igstTotal))
         }
-        canvas.drawLine(totalsX, ty - 8f, rightX, ty - 8f, linePaint)
+        canvas.drawLine(totalsX, ty - 7f, rightX, ty - 7f, linePaint)
         val grandPaint = Paint(boldPaint).apply {
             textSize = 13f
             color = accentColor
@@ -260,19 +301,135 @@ object PdfInvoiceGenerator {
         val grandRight = Paint(grandPaint).apply { textAlign = Paint.Align.RIGHT }
         canvas.drawText("GRAND TOTAL", totalsX, ty + 6f, grandPaint)
         canvas.drawText(BillingCalculator.formatInr(invoice.grandTotal), rightX - 6f, ty + 6f, grandRight)
-        ty += 24f
+        ty += 23f
         drawTotalRow("Paid Amount", BillingCalculator.formatInr(invoice.paidAmount))
         drawTotalRow("Balance Due", BillingCalculator.formatInr(invoice.balanceDue), bold = true)
 
+        // 4. Bottom-of-Page Dual Footer (Slightly Above Bottom Edge):
+        //    Left Side: App Logo + "Maya Bill App"
+        //    Right Side: Business Owner Signature + Business Name
+        drawBottomAppAndSignatureBand(
+            canvas = canvas,
+            leftX = leftX,
+            rightX = rightX,
+            bandTopY = height - 104f,
+            business = business,
+            appLogo = appLogo,
+            primaryColor = primaryColor,
+            boldPaint = boldPaint,
+            labelPaint = labelPaint
+        )
+
         val footerPaint = Paint(labelPaint).apply { textAlign = Paint.Align.CENTER }
         canvas.drawText(
-            "Generated by ${business.businessName.ifBlank { "BharatBill" }} • Thank you for your business!",
+            "Generated with Maya Bill App • ${business.businessName.ifBlank { "Maya Bill Store" }}",
             width / 2f,
-            height - 34f,
+            height - 26f,
             footerPaint
         )
 
         drawSideBranding(canvas, x = width - 10f, centerY = height / 2f, textSize = 10f)
+    }
+
+    private fun drawBottomAppAndSignatureBand(
+        canvas: Canvas,
+        leftX: Float,
+        rightX: Float,
+        bandTopY: Float,
+        business: BusinessConfig,
+        appLogo: Bitmap?,
+        primaryColor: Int,
+        boldPaint: Paint,
+        labelPaint: Paint
+    ) {
+        val dividerPaint = Paint().apply {
+            color = Color.rgb(203, 213, 225)
+            strokeWidth = 1f
+        }
+        canvas.drawLine(leftX, bandTopY - 8f, rightX, bandTopY - 8f, dividerPaint)
+
+        // Left Side: App Logo + "Maya Bill App"
+        val logoSize = 38
+        if (appLogo != null) {
+            val dest = Rect(
+                leftX.toInt(),
+                (bandTopY + 4f).toInt(),
+                (leftX + logoSize).toInt(),
+                (bandTopY + 4f + logoSize).toInt()
+            )
+            canvas.drawBitmap(appLogo, null, dest, null)
+        }
+        val textOffsetX = if (appLogo != null) leftX + logoSize + 10f else leftX
+        val appTitlePaint = Paint(boldPaint).apply {
+            color = primaryColor
+            textSize = 12.5f
+        }
+        canvas.drawText("Maya Bill App", textOffsetX, bandTopY + 21f, appTitlePaint)
+        canvas.drawText("Smart Indian GST & Billing", textOffsetX, bandTopY + 35f, labelPaint)
+
+        // Right Side: Business Owner Signature
+        val sigBoxWidth = 152f
+        val sigBoxHeight = 40f
+        val sigLeft = rightX - sigBoxWidth
+        val sigTop = bandTopY
+        drawSignatureStrokes(
+            canvas = canvas,
+            encodedStrokes = business.ownerSignatureStrokes,
+            left = sigLeft,
+            top = sigTop,
+            width = sigBoxWidth,
+            height = sigBoxHeight,
+            strokeColor = primaryColor
+        )
+        canvas.drawLine(sigLeft, sigTop + sigBoxHeight + 2f, rightX, sigTop + sigBoxHeight + 2f, dividerPaint)
+        val sigLabelPaint = Paint(labelPaint).apply {
+            textAlign = Paint.Align.RIGHT
+            color = Color.rgb(30, 41, 59)
+        }
+        canvas.drawText(
+            "Business Owner Signature",
+            rightX,
+            sigTop + sigBoxHeight + 14f,
+            sigLabelPaint
+        )
+        val ownerNamePaint = Paint(labelPaint).apply { textAlign = Paint.Align.RIGHT }
+        canvas.drawText(
+            business.businessName.ifBlank { "Authorized Signatory" }.take(28),
+            rightX,
+            sigTop + sigBoxHeight + 25f,
+            ownerNamePaint
+        )
+    }
+
+    private fun drawSignatureStrokes(
+        canvas: Canvas,
+        encodedStrokes: String,
+        left: Float,
+        top: Float,
+        width: Float,
+        height: Float,
+        strokeColor: Int
+    ) {
+        val strokes = SignatureSerializer.decode(encodedStrokes)
+        if (strokes.isEmpty()) return
+        val sigPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = strokeColor
+            style = Paint.Style.STROKE
+            strokeWidth = 2.0f
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+        strokes.forEach { pts ->
+            if (pts.isNotEmpty()) {
+                val path = Path()
+                pts.forEachIndexed { idx, (nx, ny) ->
+                    val px = left + nx * width
+                    val py = top + ny * height
+                    if (idx == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
+                canvas.drawPath(path, sigPaint)
+            }
+        }
     }
 
     private fun drawSideBranding(
@@ -299,7 +456,8 @@ object PdfInvoiceGenerator {
         width: Int,
         height: Int,
         invoice: Invoice,
-        business: BusinessConfig
+        business: BusinessConfig,
+        appLogo: Bitmap?
     ) {
         val bgPaint = Paint().apply { color = Color.WHITE }
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
@@ -324,9 +482,13 @@ object PdfInvoiceGenerator {
         val rightText = Paint(leftText).apply { textAlign = Paint.Align.RIGHT }
 
         val cx = width / 2f
-        var y = 28f
-        canvas.drawText(business.businessName.ifBlank { "BharatBill" }, cx, y, centerBold)
-        y += 15f
+        var y = 26f
+        canvas.drawText(business.businessName.ifBlank { "Maya Bill Store" }, cx, y, centerBold)
+        y += 14f
+        if (business.businessAddress.isNotBlank()) {
+            canvas.drawText(business.businessAddress.take(36), cx, y, centerText)
+            y += 13f
+        }
         if (business.businessPhone.isNotBlank()) {
             canvas.drawText("Ph: ${business.businessPhone}", cx, y, centerText)
             y += 13f
@@ -340,7 +502,11 @@ object PdfInvoiceGenerator {
         canvas.drawText("${invoice.invoiceType} BILL #${invoice.invoiceNumber}", cx, y, centerBold)
         y += 14f
         canvas.drawText("Customer: ${invoice.customerName}", 16f, y, leftText)
-        y += 13f
+        y += 12f
+        if (invoice.customerPhone.isNotBlank()) {
+            canvas.drawText("Cust Ph: ${invoice.customerPhone}", 16f, y, leftText)
+            y += 12f
+        }
         canvas.drawText("Date: ${BillingCalculator.formatShortDate(invoice.invoiceEpochMs)}", 16f, y, leftText)
         y += 13f
         canvas.drawText("----------------------------------------", cx, y, centerText)
@@ -356,6 +522,11 @@ object PdfInvoiceGenerator {
 
         canvas.drawText("----------------------------------------", cx, y, centerText)
         y += 16f
+        if (invoice.discountAmount > 0) {
+            canvas.drawText("Discount:", 16f, y, leftText)
+            canvas.drawText("-%.2f".format(invoice.discountAmount), width - 16f, y, rightText)
+            y += 14f
+        }
         canvas.drawText("Taxable:", 16f, y, leftText)
         canvas.drawText("%.2f".format(invoice.taxableTotal), width - 16f, y, rightText)
         y += 14f
@@ -366,9 +537,9 @@ object PdfInvoiceGenerator {
             y += 14f
         }
         canvas.drawText("TOTAL: ${BillingCalculator.formatInr(invoice.grandTotal)}", cx, y + 6f, centerBold)
-        y += 24f
+        y += 22f
         canvas.drawText("Status: ${invoice.paymentStatus} | Paid: ${BillingCalculator.formatInr(invoice.paidAmount)}", cx, y, centerText)
-        y += 18f
+        y += 16f
 
         if (business.upiId.isNotBlank() && business.upiQrEnabled) {
             val qrAmt = if (invoice.balanceDue > 0) invoice.balanceDue else invoice.grandTotal
@@ -379,13 +550,31 @@ object PdfInvoiceGenerator {
                 invoice.invoiceNumber,
                 invoice.invoiceNumber
             )
-            UpiQrGenerator.generateQrBitmap(uri, 180)?.let { bmp ->
-                val left = (width - 110) / 2
-                canvas.drawBitmap(bmp, null, Rect(left, y.toInt(), left + 110, (y + 110).toInt()), null)
-                y += 124f
+            UpiQrGenerator.generateQrBitmap(uri, 160)?.let { bmp ->
+                val left = (width - 96) / 2
+                canvas.drawBitmap(bmp, null, Rect(left, y.toInt(), left + 96, (y + 96).toInt()), null)
+                y += 108f
             }
         }
-        canvas.drawText("Thank You! Visit Again", cx, y, centerText)
+
+        // Bottom Owner Signature & Maya Bill App Logo + Name
+        val bandY = (height - 76f).coerceAtLeast(y + 8f)
+        if (appLogo != null) {
+            canvas.drawBitmap(appLogo, null, Rect(16, bandY.toInt(), 42, (bandY + 26).toInt()), null)
+        }
+        canvas.drawText("Maya Bill App", if (appLogo != null) 48f else 16f, bandY + 18f, leftText)
+
+        drawSignatureStrokes(
+            canvas = canvas,
+            encodedStrokes = business.ownerSignatureStrokes,
+            left = width - 116f,
+            top = bandY - 4f,
+            width = 96f,
+            height = 28f,
+            strokeColor = Color.BLACK
+        )
+        canvas.drawText("Owner Sign", width - 18f, bandY + 34f, rightText)
+
         drawSideBranding(canvas, x = width - 6f, centerY = height / 2f, textSize = 7.5f)
     }
 
@@ -396,8 +585,9 @@ object PdfInvoiceGenerator {
     ): File {
         val dir = File(context.cacheDir, "invoices").apply { mkdirs() }
         val file = File(dir, "Receipt_${payment.invoiceNumber.replace(Regex("[^a-zA-Z0-9_-]"), "_")}.pdf")
+        val appLogo = loadAppLogoBitmap(context)
         val doc = PdfDocument()
-        val pageInfo = PdfDocument.PageInfo.Builder(420, 520, 1).create()
+        val pageInfo = PdfDocument.PageInfo.Builder(420, 560, 1).create()
         val page = doc.startPage(pageInfo)
         val c = page.canvas
         c.drawColor(Color.WHITE)
@@ -411,19 +601,32 @@ object PdfInvoiceGenerator {
             color = Color.rgb(15, 23, 42)
             textSize = 12f
         }
+        val lPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(100, 116, 139)
+            textSize = 9.5f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
         val gPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(14, 159, 110)
             textSize = 14f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
 
-        var y = 44f
-        c.drawText(business.businessName.ifBlank { "BharatBill" }, 28f, y, hPaint)
-        y += 24f
+        var y = 42f
+        c.drawText(business.businessName.ifBlank { "Maya Bill Store" }, 28f, y, hPaint)
+        y += 18f
+        if (business.businessPhone.isNotBlank()) {
+            c.drawText("Phone: ${business.businessPhone}", 28f, y, bPaint)
+            y += 16f
+        }
+        if (business.businessAddress.isNotBlank()) {
+            c.drawText(business.businessAddress.take(45), 28f, y, bPaint)
+            y += 20f
+        }
         c.drawText("PAYMENT RECEIPT", 28f, y, hPaint)
-        y += 24f
+        y += 22f
         c.drawText("Status: ${payment.verificationStatus}", 28f, y, gPaint)
-        y += 26f
+        y += 24f
         c.drawText("Invoice #: ${payment.invoiceNumber}", 28f, y, bPaint)
         y += 20f
         c.drawText("Customer: ${payment.customerName}", 28f, y, bPaint)
@@ -437,11 +640,24 @@ object PdfInvoiceGenerator {
         c.drawText("Owner Verified: ${if (payment.verifiedByOwner) "YES" else "PENDING"}", 28f, y, bPaint)
         y += 20f
         c.drawText("Date: ${BillingCalculator.formatDate(payment.paymentEpochMs)}", 28f, y, bPaint)
-        drawSideBranding(c, x = 410f, centerY = 260f, textSize = 9.5f)
+
+        drawBottomAppAndSignatureBand(
+            canvas = c,
+            leftX = 28f,
+            rightX = 390f,
+            bandTopY = 470f,
+            business = business,
+            appLogo = appLogo,
+            primaryColor = Color.rgb(12, 43, 71),
+            boldPaint = bPaint,
+            labelPaint = lPaint
+        )
+        drawSideBranding(c, x = 410f, centerY = 280f, textSize = 9.5f)
 
         doc.finishPage(page)
         FileOutputStream(file).use { doc.writeTo(it) }
         doc.close()
+        appLogo?.recycle()
         return file
     }
 

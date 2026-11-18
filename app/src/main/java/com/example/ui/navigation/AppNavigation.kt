@@ -72,6 +72,7 @@ import com.example.model.Invoice
 import com.example.model.InvoiceLineItem
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.BillingScreen
+import com.example.ui.screens.BusinessOnboardingScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.InventoryScreen
 import com.example.ui.screens.OwnerAdminScreen
@@ -134,8 +135,14 @@ fun AppNavigation(
         .collectAsStateWithLifecycle(initialValue = Firebase.auth.currentUser)
 
     val user = currentUser
+    val authScope = rememberCoroutineScope()
     if (user == null) {
-        AuthScreen(onAuthSuccess = {})
+        AuthScreen(
+            onSavePendingInputs = { phone, gstin ->
+                authScope.launch { prefs.setPendingLoginInputs(phone, gstin) }
+            },
+            onAuthSuccess = {}
+        )
     } else {
         key(user.uid) {
             AuthenticatedAppShell(
@@ -158,6 +165,8 @@ private fun AuthenticatedAppShell(
 
     val themeMode by prefs.themeModeFlow.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM)
     val language by prefs.languageFlow.collectAsStateWithLifecycle(initialValue = AppLanguage.ENGLISH)
+    val pendingPhone by prefs.pendingPhoneFlow.collectAsStateWithLifecycle(initialValue = "")
+    val pendingGstin by prefs.pendingGstinFlow.collectAsStateWithLifecycle(initialValue = "")
 
     val mainVm: MainBillingViewModel = viewModel(
         key = "main_${user.uid}",
@@ -167,7 +176,7 @@ private fun AuthenticatedAppShell(
                     billingRepo = BillingRepository(app),
                     ownerRepo = OwnerRepository(app),
                     currentUserId = user.uid,
-                    defaultDisplayName = user.displayName ?: "BharatBill Enterprises"
+                    defaultDisplayName = user.displayName ?: "Maya Bill Store"
                 )
             }
         }
@@ -256,7 +265,7 @@ private fun AuthenticatedAppShell(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             floatingActionButton = {
                 val cfg = workspaceOrNull?.config
-                val showFab = cfg?.voiceBillingEnabled == true &&
+                val showFab = cfg?.profileCompleted == true && cfg.voiceBillingEnabled &&
                     (currentDest?.hasRoute<RouteDashboard>() == true || currentDest?.hasRoute<RouteBilling>() == true)
                 if (showFab) {
                     FloatingActionButton(
@@ -272,7 +281,8 @@ private fun AuthenticatedAppShell(
                 }
             },
             bottomBar = {
-                if (!useRail) {
+                val cfg = workspaceOrNull?.config
+                if (!useRail && cfg?.profileCompleted == true) {
                     NavigationBar {
                         TopNavItems.forEach { item ->
                             val selected = currentDest?.hasRoute(item.route::class) == true
@@ -304,7 +314,8 @@ private fun AuthenticatedAppShell(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                if (useRail) {
+                val cfg = workspaceOrNull?.config
+                if (useRail && cfg?.profileCompleted == true) {
                     NavigationRail {
                         Spacer(Modifier.height(12.dp))
                         TopNavItems.forEach { item ->
@@ -341,7 +352,7 @@ private fun AuthenticatedAppShell(
                             ) {
                                 CircularProgressIndicator()
                                 Spacer(Modifier.height(12.dp))
-                                Text("Syncing BharatBill Cloud Workspace...")
+                                Text("Syncing Maya Bill App Workspace...")
                             }
                         }
 
@@ -371,6 +382,30 @@ private fun AuthenticatedAppShell(
 
                         is UiState.Success -> {
                             val workspace = state.data
+                            if (!workspace.config.profileCompleted) {
+                                BusinessOnboardingScreen(
+                                    config = workspace.config,
+                                    userEmail = user.email.orEmpty(),
+                                    defaultDisplayName = user.displayName ?: "",
+                                    pendingPhone = pendingPhone,
+                                    pendingGstin = pendingGstin,
+                                    isSaving = ownerBusy,
+                                    onSaveProfile = { updatedConfig ->
+                                        ownerVm.saveBusinessConfig(updatedConfig)
+                                        scope.launch { prefs.clearPendingLoginInputs() }
+                                    },
+                                    onSkip = {
+                                        ownerVm.saveBusinessConfig(
+                                            workspace.config.copy(
+                                                businessPhone = pendingPhone.ifBlank { workspace.config.businessPhone },
+                                                gstin = pendingGstin.ifBlank { workspace.config.gstin },
+                                                profileCompleted = true
+                                            )
+                                        )
+                                        scope.launch { prefs.clearPendingLoginInputs() }
+                                    }
+                                )
+                            } else {
                             NavHost(
                                 navController = navController,
                                 startDestination = RouteDashboard,
@@ -539,6 +574,7 @@ private fun AuthenticatedAppShell(
                                         onShowMessage = { msg -> mainVm.showMessage(msg) }
                                     )
                                 }
+                            }
                             }
                         }
                     }
